@@ -1,10 +1,9 @@
 mod cache;
 mod client;
 
-use crate::{cache::Cache, client::Client};
+use crate::cache::Cache;
 use serde::{Deserialize, Serialize};
-use std::io::ErrorKind;
-use tracing::{instrument, level_filters::LevelFilter};
+use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
