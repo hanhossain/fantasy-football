@@ -1,5 +1,8 @@
-use reqwest::header::ETAG;
+mod client;
+
+use crate::client::Client;
 use serde::{Deserialize, Serialize};
+use std::io::ErrorKind;
 use tracing::{instrument, level_filters::LevelFilter};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -14,46 +17,71 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let state = get_state().await?;
-    let metadata = Metadata { state };
+    let mut metadata = load_metadata().await?.unwrap_or_default();
+    let mut is_modified = false;
 
-    let raw = serde_json::to_string_pretty(&metadata)?;
+    let client = Client::new();
 
-    tokio::fs::write("metadata.json", raw).await?;
+    let state_etag = metadata.state.as_ref().and_then(|x| x.etag.as_ref());
+    let state = get_state(&state_etag, &client).await?;
+
+    if let Some(state) = state {
+        metadata.state = Some(state);
+        is_modified = true;
+    }
+
+    save_metadata(&metadata, is_modified).await?;
+
     Ok(())
 }
 
 #[instrument]
-async fn get_state() -> anyhow::Result<MetadataEntry> {
-    let response = reqwest::get("https://api.sleeper.app/v1/state/nfl")
-        .await?
-        .error_for_status()?;
-    let etag = response
-        .headers()
-        .get(ETAG)
-        .map(|e| e.to_str().map(|x| x.to_owned()))
-        .transpose()?;
-
-    if etag.is_none() {
-        tracing::warn!("missing etag in state");
+async fn load_metadata() -> anyhow::Result<Option<Metadata>> {
+    tracing::info!("loading metadata");
+    let res = tokio::fs::read("metadata.json").await;
+    match res {
+        Ok(data) => {
+            let metadata = serde_json::from_slice(data.as_slice())?;
+            Ok(metadata)
+        }
+        Err(err) => {
+            if err.kind() == ErrorKind::NotFound {
+                tracing::warn!(?err, "file not found");
+                Ok(None)
+            } else {
+                Err(err.into())
+            }
+        }
     }
-
-    match &etag {
-        Some(etag) => tracing::info!(etag),
-        None => tracing::warn!("missing etag"),
-    }
-
-    let content = response.text().await?;
-    Ok(MetadataEntry { etag, content })
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[instrument(skip_all)]
+async fn save_metadata(metadata: &Metadata, is_modified: bool) -> anyhow::Result<()> {
+    if is_modified {
+        let raw = serde_json::to_string_pretty(metadata)?;
+        tokio::fs::write("metadata.json", raw).await?;
+        tracing::info!("saved metadata");
+    } else {
+        tracing::info!("no modifications needed");
+    }
+    Ok(())
+}
+
+#[instrument(skip_all)]
+async fn get_state(
+    prev_etag: &Option<&String>,
+    client: &Client,
+) -> anyhow::Result<Option<MetadataEntry>> {
+    client.get("/v1/state/nfl", prev_etag).await
+}
+
+#[derive(Clone, Deserialize, Serialize)]
 struct MetadataEntry {
     etag: Option<String>,
     content: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Default)]
 struct Metadata {
-    state: MetadataEntry,
+    state: Option<MetadataEntry>,
 }
