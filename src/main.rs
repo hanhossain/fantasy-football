@@ -22,11 +22,13 @@ async fn main() -> anyhow::Result<()> {
 
     let client = Client::new();
 
-    let state_etag = metadata.state.as_ref().and_then(|x| x.etag.as_ref());
-    let state = get_state(&state_etag, &client).await?;
-
-    if let Some(state) = state {
+    if let Some(state) = client.get_state(&metadata).await? {
         metadata.state = Some(state);
+        is_modified = true;
+    }
+
+    if let Some(players) = client.get_players(&metadata).await? {
+        metadata.players = Some(players);
         is_modified = true;
     }
 
@@ -67,14 +69,6 @@ async fn save_metadata(metadata: &Metadata, is_modified: bool) -> anyhow::Result
     Ok(())
 }
 
-#[instrument(skip_all)]
-async fn get_state(
-    prev_etag: &Option<&String>,
-    client: &Client,
-) -> anyhow::Result<Option<MetadataEntry>> {
-    client.get("/v1/state/nfl", prev_etag).await
-}
-
 #[derive(Clone, Deserialize, Serialize)]
 struct MetadataEntry {
     etag: Option<String>,
@@ -84,4 +78,5 @@ struct MetadataEntry {
 #[derive(Clone, Deserialize, Serialize, Default)]
 struct Metadata {
     state: Option<MetadataEntry>,
+    players: Option<MetadataEntry>,
 }

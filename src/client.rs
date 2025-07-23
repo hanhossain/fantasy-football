@@ -1,4 +1,4 @@
-use crate::MetadataEntry;
+use crate::{Metadata, MetadataEntry};
 use reqwest::{
     StatusCode, Url,
     header::{ETAG, HeaderMap, IF_NONE_MATCH},
@@ -18,7 +18,7 @@ impl Client {
     }
 
     #[instrument(skip(self))]
-    pub async fn get(
+    async fn get(
         &self,
         path: &str,
         prev_etag: &Option<&String>,
@@ -60,5 +60,23 @@ impl Client {
         tracing::debug!("finished request");
 
         Ok(Some(MetadataEntry { etag, content }))
+    }
+
+    #[instrument(skip_all)]
+    pub async fn get_state(&self, metadata: &Metadata) -> anyhow::Result<Option<MetadataEntry>> {
+        let etag = match &metadata.state {
+            Some(MetadataEntry { etag, .. }) => etag.as_ref(),
+            None => None,
+        };
+        self.get("/v1/state/nfl", &etag).await
+    }
+
+    #[instrument(skip_all)]
+    pub async fn get_players(&self, metadata: &Metadata) -> anyhow::Result<Option<MetadataEntry>> {
+        let etag = match &metadata.players {
+            Some(MetadataEntry { etag, .. }) => etag.as_ref(),
+            None => None,
+        };
+        self.get("/v1/players/nfl", &etag).await
     }
 }
