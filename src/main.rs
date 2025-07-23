@@ -1,39 +1,48 @@
-use serde::Deserialize;
-use tracing::{info, instrument};
+use reqwest::header::ETAG;
+use serde::{Deserialize, Serialize};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
         .with(fmt::layer())
         .with(EnvFilter::from_default_env())
         .init();
 
-    print_state().await;
+    let state = get_state().await?;
+    let metadata = Metadata { state };
+
+    let raw = serde_json::to_string_pretty(&metadata)?;
+
+    tokio::fs::write("metadata.json", raw).await?;
+    Ok(())
 }
 
-#[instrument]
-async fn print_state() {
-    let state = reqwest::get("https://api.sleeper.app/v1/state/nfl")
-        .await
-        .unwrap()
-        .json::<NflState>()
-        .await
-        .unwrap();
-    info!(?state, "Got nfl state");
+async fn get_state() -> anyhow::Result<MetadataEntry> {
+    let response = reqwest::get("https://api.sleeper.app/v1/state/nfl")
+        .await?
+        .error_for_status()?;
+    let etag = response
+        .headers()
+        .get(ETAG)
+        .map(|e| e.to_str().map(|x| x.to_owned()))
+        .transpose()?;
+
+    if etag.is_none() {
+        tracing::warn!("missing etag in state");
+    }
+
+    let content = response.text().await?;
+    Ok(MetadataEntry { etag, content })
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
-struct NflState {
-    week: u8,
-    leg: u8,
-    season: String,
-    season_type: String,
-    league_season: String,
-    previous_season: String,
-    season_start_date: String,
-    display_week: u8,
-    league_create_season: String,
-    season_has_scores: bool,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct MetadataEntry {
+    etag: Option<String>,
+    content: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct Metadata {
+    state: MetadataEntry,
 }
