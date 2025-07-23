@@ -18,11 +18,11 @@ impl Client {
     }
 
     #[instrument(skip(self))]
-    async fn get(
+    pub async fn get(
         &self,
         path: &str,
         prev_etag: &Option<&String>,
-    ) -> anyhow::Result<Option<MetadataEntry>> {
+    ) -> anyhow::Result<Option<SleeperEntry>> {
         tracing::debug!("starting request");
 
         let url = self.base_url.join(path)?;
@@ -59,11 +59,11 @@ impl Client {
         let content = response.text().await?;
         tracing::debug!("finished request");
 
-        Ok(Some(MetadataEntry { etag, content }))
+        Ok(Some(SleeperEntry { etag, content }))
     }
 
     #[instrument(skip_all)]
-    pub async fn get_state(&self, metadata: &Metadata) -> anyhow::Result<Option<MetadataEntry>> {
+    pub async fn get_state(&self, metadata: &Metadata) -> anyhow::Result<Option<SleeperEntry>> {
         let etag = match &metadata.state {
             Some(MetadataEntry { etag, .. }) => etag.as_ref(),
             None => None,
@@ -72,11 +72,17 @@ impl Client {
     }
 
     #[instrument(skip_all)]
-    pub async fn get_players(&self, metadata: &Metadata) -> anyhow::Result<Option<MetadataEntry>> {
+    pub async fn get_players(&self, metadata: &Metadata) -> anyhow::Result<Option<SleeperEntry>> {
         let etag = match &metadata.players {
             Some(MetadataEntry { etag, .. }) => etag.as_ref(),
             None => None,
         };
         self.get("/v1/players/nfl", &etag).await
     }
+}
+
+#[derive(Debug)]
+pub struct SleeperEntry {
+    pub etag: Option<String>,
+    pub content: String,
 }
