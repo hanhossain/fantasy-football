@@ -1,13 +1,13 @@
 use serde::Deserialize;
-use tracing::{Level, info, instrument};
-use tracing_subscriber::FmtSubscriber;
+use tracing::{info, instrument};
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() {
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::TRACE)
-        .finish();
-    tracing::subscriber::set_global_default(subscriber).unwrap();
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(EnvFilter::from_default_env())
+        .init();
 
     print_state().await;
 }
