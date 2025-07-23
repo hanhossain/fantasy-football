@@ -1,0 +1,7 @@
+{
+    "rust-analyzer.procMacro.ignored": {
+        "tracing-attributes": [
+            "instrument"
+        ]
+    }
+}
