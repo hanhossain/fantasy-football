@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use tracing::{info, instrument, Level};
+use tracing::{Level, info, instrument};
 use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main]
