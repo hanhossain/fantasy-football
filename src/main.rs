@@ -1,12 +1,17 @@
 use reqwest::header::ETAG;
 use serde::{Deserialize, Serialize};
+use tracing::{instrument, level_filters::LevelFilter};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
         .with(fmt::layer())
-        .with(EnvFilter::from_default_env())
+        .with(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
         .init();
 
     let state = get_state().await?;
@@ -18,6 +23,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[instrument]
 async fn get_state() -> anyhow::Result<MetadataEntry> {
     let response = reqwest::get("https://api.sleeper.app/v1/state/nfl")
         .await?
@@ -30,6 +36,11 @@ async fn get_state() -> anyhow::Result<MetadataEntry> {
 
     if etag.is_none() {
         tracing::warn!("missing etag in state");
+    }
+
+    match &etag {
+        Some(etag) => tracing::info!(etag),
+        None => tracing::warn!("missing etag"),
     }
 
     let content = response.text().await?;
