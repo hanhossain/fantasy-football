@@ -79,6 +79,22 @@ impl Client {
         };
         self.get("/v1/players/nfl", &etag).await
     }
+
+    #[instrument(skip(self, metadata))]
+    pub async fn get_schedule(
+        &self,
+        metadata: &Metadata,
+        season_type: &str,
+        season: &str,
+    ) -> anyhow::Result<Option<SleeperEntry>> {
+        let etag = match &metadata.schedules {
+            Some(schedules) => schedules.get(season).map(|x| x.etag.as_ref()),
+            None => None,
+        }
+        .flatten();
+        self.get(&format!("/schedule/nfl/{season_type}/{season}"), &etag)
+            .await
+    }
 }
 
 #[derive(Debug)]

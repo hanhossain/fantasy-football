@@ -1,4 +1,5 @@
 use crate::{Metadata, MetadataEntry, client::Client};
+use serde::Deserialize;
 use std::io::ErrorKind;
 use tracing::instrument;
 
@@ -88,4 +89,62 @@ impl Cache {
             .replace(MetadataEntry { etag: players.etag });
         Ok(())
     }
+
+    #[instrument(skip_all)]
+    pub async fn update_schedules(&mut self) -> anyhow::Result<()> {
+        // load state
+        let content = tokio::fs::read(format!("{RAW_CACHE_DIR}/state.json")).await?;
+        let state: SleeperState = serde_json::from_slice(content.as_slice())?;
+
+        let previous_season = self
+            .client
+            .get_schedule(&self.metadata, "regular", &state.previous_season)
+            .await?;
+        if let Some(previous_season) = previous_season {
+            tokio::fs::write(
+                format!(
+                    "{RAW_CACHE_DIR}/schedules/regular/{}.json",
+                    state.previous_season
+                ),
+                previous_season.content,
+            )
+            .await?;
+
+            let schedules = self.metadata.schedules.get_or_insert_default();
+            schedules.insert(
+                state.previous_season.clone(),
+                MetadataEntry {
+                    etag: previous_season.etag,
+                },
+            );
+        }
+
+        let current_season = self
+            .client
+            .get_schedule(&self.metadata, "regular", &state.season)
+            .await?;
+        if let Some(current_season) = current_season {
+            tokio::fs::write(
+                format!("{RAW_CACHE_DIR}/schedules/regular/{}.json", state.season),
+                current_season.content,
+            )
+            .await?;
+
+            let schedules = self.metadata.schedules.get_or_insert_default();
+            schedules.insert(
+                state.season.clone(),
+                MetadataEntry {
+                    etag: current_season.etag,
+                },
+            );
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Deserialize)]
+struct SleeperState {
+    previous_season: String,
+    season: String,
 }

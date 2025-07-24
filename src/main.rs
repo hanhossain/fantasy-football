@@ -3,6 +3,7 @@ mod client;
 
 use crate::cache::Cache;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -22,6 +23,7 @@ async fn main() -> anyhow::Result<()> {
 
     cache.update_state().await?;
     cache.update_players().await?;
+    cache.update_schedules().await?;
 
     cache.save_metadata().await?;
 
@@ -37,4 +39,5 @@ struct MetadataEntry {
 struct Metadata {
     state: Option<MetadataEntry>,
     players: Option<MetadataEntry>,
+    schedules: Option<HashMap<String, MetadataEntry>>,
 }
