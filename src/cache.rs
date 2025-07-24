@@ -2,7 +2,7 @@ use crate::{Metadata, MetadataEntry, client::Client};
 use std::io::ErrorKind;
 use tracing::instrument;
 
-const CACHE_PATH: &str = "data/metadata.json";
+const RAW_CACHE_DIR: &str = "data/raw";
 
 pub struct Cache {
     client: Client,
@@ -27,7 +27,7 @@ impl Cache {
     pub async fn load_metadata(&mut self) -> anyhow::Result<()> {
         tracing::info!("loading metadata");
 
-        let res = tokio::fs::read(CACHE_PATH).await;
+        let res = tokio::fs::read(format!("{RAW_CACHE_DIR}/metadata.json")).await;
         let data = res.map_or_else(
             |err| match err.kind() {
                 ErrorKind::NotFound => {
@@ -52,7 +52,7 @@ impl Cache {
     pub async fn save_metadata(&mut self) -> anyhow::Result<()> {
         if self.metadata != self.old_metadata {
             let raw = serde_json::to_string_pretty(&self.metadata)?;
-            tokio::fs::write(CACHE_PATH, raw).await?;
+            tokio::fs::write(format!("{RAW_CACHE_DIR}/metadata.json"), raw).await?;
             tracing::info!("saved metadata");
         } else {
             tracing::info!("no modifications needed");
@@ -66,7 +66,7 @@ impl Cache {
             return Ok(());
         };
 
-        tokio::fs::write("data/state.json", state.content).await?;
+        tokio::fs::write(format!("{RAW_CACHE_DIR}/state.json"), state.content).await?;
 
         self.metadata
             .state
@@ -81,7 +81,7 @@ impl Cache {
             return Ok(());
         };
 
-        tokio::fs::write("data/players.json", players.content).await?;
+        tokio::fs::write(format!("{RAW_CACHE_DIR}/players.json"), players.content).await?;
 
         self.metadata
             .players
